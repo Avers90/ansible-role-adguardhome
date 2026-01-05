@@ -66,13 +66,8 @@
   when: adguardhome_configure_resolv
 
 - name: adguardhome | Create static /etc/resolv.conf
-  ansible.builtin.copy:
-    content: |
-      # {{ ansible_managed }}
-      # Fallback DNS servers
-      {% for dns in adguardhome_fallback_dns %}
-      nameserver {{ dns }}
-      {% endfor %}
+  ansible.builtin.template:
+    src: resolv.conf.j2
     dest: /etc/resolv.conf
     owner: root
     group: root

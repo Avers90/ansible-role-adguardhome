@@ -1,0 +1,5 @@
+# {{ ansible_managed }}
+# Fallback DNS servers
+{% for dns in adguardhome_fallback_dns %}
+nameserver {{ dns }}
+{% endfor %}
