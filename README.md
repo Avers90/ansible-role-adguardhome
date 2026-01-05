@@ -7,10 +7,6 @@ Install [AdGuard Home](https://github.com/AdguardTeam/AdGuardHome) - network-wid
 - Debian/Ubuntu
 - Collection: `ansible.utils`
 
-```bash
-ansible-galaxy collection install ansible.utils
-```
-
 ## Supported Distributions
 
 - Debian (bullseye, bookworm)
@@ -22,7 +18,7 @@ Other distributions will fail with an error message.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `adguardhome_version` | `latest` | Version to install |
+| `adguardhome_version` | `v0.107.71` | Version to install (always exact) |
 | `adguardhome_update` | `false` | Force update if installed |
 | `adguardhome_install_dir` | `/opt/AdGuardHome` | Installation directory |
 | `adguardhome_disable_resolved` | `true` | Disable systemd-resolved |
@@ -44,6 +40,33 @@ Other distributions will fail with an error message.
 | `adguardhome_filters` | AdGuard, AdAway | DNS filters |
 | `adguardhome_user_rules` | `[]` | Custom whitelist rules |
 
+## Version Management
+
+**Important:** Always specify exact version in `defaults/main.yml`.
+
+The template `AdGuardHome.yaml.j2` is tied to specific `schema_version`.
+When updating AdGuard Home, you may need to update the template as well.
+
+### Current version
+
+```yaml
+adguardhome_version: "v0.107.71"  # schema_version: 32
+```
+
+### Updating to new version
+
+1. Check [AdGuard Home releases](https://github.com/AdguardTeam/AdGuardHome/releases)
+2. Review changelog for config changes
+3. Update `adguardhome_version` in `defaults/main.yml`
+4. Update `templates/AdGuardHome.yaml.j2` if schema changed
+5. Run update
+
+### Version history
+
+| Role version | AdGuard Home | schema_version |
+|--------------|--------------|----------------|
+| 1.0.0 | v0.107.71 | 32 |
+
 ## Password Hash Generation
 
 Generate bcrypt hash for admin password:
@@ -54,6 +77,19 @@ htpasswd -B -n -b "" 'yourpassword' | cut -d: -f2
 
 # Using Python
 python3 -c "import bcrypt; print(bcrypt.hashpw(b'yourpassword', bcrypt.gensalt()).decode())"
+```
+
+## Examples
+
+### Basic usage with WireGuard
+
+```yaml
+wireguard_address: "10.0.0.1/24"
+wireguard_dns: "10.0.0.1"
+
+adguardhome_admin_user: "admin"
+adguardhome_admin_pass_hash: "{{ vault_adguardhome_pass_hash }}"
+adguardhome_language: "ru"
 ```
 
 ### Custom filters
@@ -78,26 +114,6 @@ adguardhome_user_rules:
   - "@@||telegram.org^$important"
   - "@@||*.telegram.org^$important"
   - "@@||t.me^$important"
-```
-
-## Updating AdGuard Home
-
-### Update to latest version
-
-```bash
-ansible-playbook playbooks/adguardhome.yml -e adguardhome_update=true -e adguardhome_version=latest
-```
-
-### Update to specific version
-
-```bash
-ansible-playbook playbooks/adguardhome.yml -e adguardhome_update=true -e adguardhome_version=v0.107.72
-```
-
-### Check current version
-
-```bash
-/opt/AdGuardHome/AdGuardHome --version
 ```
 
 ## Backup and Restore
@@ -153,6 +169,9 @@ journalctl -u AdGuardHome -f
 
 # Restart
 systemctl restart AdGuardHome
+
+# Check version
+/opt/AdGuardHome/AdGuardHome --version
 ```
 
 ## Files Modified
@@ -168,9 +187,9 @@ systemctl restart AdGuardHome
 
 ## Configuration Management
 
-- Initial config is deployed via Ansible template
+- Initial config is deployed via template
 - After first run, manage settings through Web UI
-- Ansible will NOT overwrite existing config (`force: false`)
+- Config will NOT be overwritten on subsequent runs
 - On update, config and data are preserved from backup
 
 ## Troubleshooting
@@ -195,7 +214,7 @@ Should contain fallback DNS servers.
 
 1. Check service: `systemctl status AdGuardHome`
 2. Check port: `ss -tlnp | grep 3000`
-3. Connect via VPN first, then access `http://10.0.0.1:3000`
+3. Connect via VPN first, then access `http://10.10.0.1:3000`
 
 ## License
 

@@ -1,6 +1,6 @@
 ---
-## AdGuard Home version (e.g., "v0.107.52" or "latest")
-# adguardhome_version: "latest"
+## AdGuard Home version (always specify exact version!)
+## Template AdGuardHome.yaml.j2 is tied to specific schema_version
 adguardhome_version: "v0.107.71"
 
 ## Force update even if already installed

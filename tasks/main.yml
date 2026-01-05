@@ -79,37 +79,21 @@
     mode: "0644"
   when: adguardhome_configure_resolv
 
-## Determine version to install
+## Determine architecture
 - name: adguardhome | Set architecture fact
   ansible.builtin.set_fact:
     adguardhome_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' if ansible_architecture == 'aarch64' else ansible_architecture }}"
 
-- name: adguardhome | Get latest version from GitHub API
-  ansible.builtin.uri:
-    url: https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest
-    return_content: true
-  register: adguardhome_latest_release
-  when: adguardhome_version == "latest"
-
-- name: adguardhome | Set version fact (latest)
-  ansible.builtin.set_fact:
-    adguardhome_version_actual: "{{ adguardhome_latest_release.json.tag_name }}"
-  when: adguardhome_version == "latest"
-
-- name: adguardhome | Set version fact (specific)
-  ansible.builtin.set_fact:
-    adguardhome_version_actual: "{{ adguardhome_version }}"
-  when: adguardhome | adguardhome_version != "latest"
-
+## Check if update is needed
 - name: adguardhome | Check if update is needed
   ansible.builtin.set_fact:
-    adguardhome_needs_install: "{{ not adguardhome_installed.stat.exists or (adguardhome_update and adguardhome_current_version.stdout | default('') != adguardhome_version_actual) }}"
+    adguardhome_needs_install: "{{ not adguardhome_installed.stat.exists or (adguardhome_update and adguardhome_current_version.stdout | default('') != adguardhome_version) }}"
 
 - name: adguardhome | Display version information
   ansible.builtin.debug:
     msg: |
       Current version: {{ adguardhome_current_version.stdout | default('not installed') }}
-      Target version: {{ adguardhome_version_actual }}
+      Target version: {{ adguardhome_version }}
       Update mode: {{ adguardhome_update }}
       Will install/update: {{ adguardhome_needs_install }}
 
@@ -159,7 +143,7 @@
 
 - name: adguardhome | Download AdGuard Home
   ansible.builtin.get_url:
-    url: "https://github.com/AdguardTeam/AdGuardHome/releases/download/{{ adguardhome_version_actual }}/AdGuardHome_linux_{{ adguardhome_arch }}.tar.gz"
+    url: "https://github.com/AdguardTeam/AdGuardHome/releases/download/{{ adguardhome_version }}/AdGuardHome_linux_{{ adguardhome_arch }}.tar.gz"
     dest: /tmp/AdGuardHome.tar.gz
     mode: "0644"
   when: adguardhome_needs_install
@@ -251,7 +235,7 @@
 - name: adguardhome | Display access information
   ansible.builtin.debug:
     msg: |
-      AdGuard Home {{ adguardhome_version_actual }} installed successfully!
+      AdGuard Home {{ adguardhome_version }} installed successfully!
 
       Web UI: http://{{ adguardhome_web_host }}:{{ adguardhome_web_port }}
       DNS: {{ adguardhome_dns_bind_hosts | join(', ') }}:{{ adguardhome_dns_port }}
