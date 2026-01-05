@@ -92,50 +92,7 @@
       Update mode: {{ adguardhome_update }}
       Will install/update: {{ adguardhome_needs_install }}
 
-## Backup before update
-- name: adguardhome | Set backup directory name
-  ansible.builtin.set_fact:
-    adguardhome_backup_dir: "{{ adguardhome_install_dir }}.backup.{{ adguardhome_current_version.stdout }}.{{ ansible_date_time.iso8601_basic_short }}"
-  when:
-    - adguardhome_needs_install
-    - adguardhome_installed.stat.exists
-
-- name: adguardhome | Stop AdGuard Home before update
-  ansible.builtin.systemd:
-    name: AdGuardHome
-    state: stopped
-  when:
-    - adguardhome_needs_install
-    - adguardhome_installed.stat.exists
-  ignore_errors: true
-
-- name: adguardhome | Backup entire AdGuard Home directory
-  ansible.builtin.copy:
-    src: "{{ adguardhome_install_dir }}/"
-    dest: "{{ adguardhome_backup_dir }}/"
-    remote_src: true
-    mode: preserve
-  when:
-    - adguardhome_needs_install
-    - adguardhome_installed.stat.exists
-
-- name: adguardhome | Display backup location
-  ansible.builtin.debug:
-    msg: "Backup created at: {{ adguardhome_backup_dir }}"
-  when:
-    - adguardhome_needs_install
-    - adguardhome_installed.stat.exists
-
-## Download and install/update AdGuard Home
-- name: adguardhome | Create installation directory
-  ansible.builtin.file:
-    path: "{{ adguardhome_install_dir }}"
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
-  when: adguardhome_needs_install
-
+## Fresh install
 - name: adguardhome | Download AdGuard Home
   ansible.builtin.get_url:
     url: "https://github.com/AdguardTeam/AdGuardHome/releases/download/{{ adguardhome_version }}/AdGuardHome_linux_{{ adguardhome_arch }}.tar.gz"
@@ -143,17 +100,55 @@
     mode: "0644"
   when: adguardhome_needs_install
 
-- name: adguardhome | Extract AdGuard Home
+- name: adguardhome | Extract AdGuard Home (fresh install)
   ansible.builtin.unarchive:
     src: /tmp/AdGuardHome.tar.gz
     dest: /opt
     remote_src: true
-  when: adguardhome_needs_install
+  when:
+    - adguardhome_needs_install
+    - not adguardhome_installed.stat.exists
+
+## Update: replace only binary
+- name: adguardhome | Stop AdGuard Home before update
+  ansible.builtin.systemd:
+    name: AdGuardHome
+    state: stopped
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Backup current binary
+  ansible.builtin.copy:
+    src: "{{ adguardhome_install_dir }}/AdGuardHome"
+    dest: "{{ adguardhome_install_dir }}/AdGuardHome.backup.{{ adguardhome_current_version.stdout }}"
+    remote_src: true
+    mode: "0755"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Extract only binary from archive (update)
+  ansible.builtin.shell: |
+    tar -xzf /tmp/AdGuardHome.tar.gz -C /tmp AdGuardHome/AdGuardHome
+    mv /tmp/AdGuardHome/AdGuardHome {{ adguardhome_install_dir }}/AdGuardHome
+    rm -rf /tmp/AdGuardHome
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
 
 - name: adguardhome | Remove downloaded archive
   ansible.builtin.file:
     path: /tmp/AdGuardHome.tar.gz
     state: absent
+
+- name: adguardhome | Set permissions on AdGuard Home directory
+  ansible.builtin.file:
+    path: "{{ adguardhome_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
 
 - name: adguardhome | Set permissions on AdGuard Home binary
   ansible.builtin.file:
@@ -161,33 +156,6 @@
     owner: root
     group: root
     mode: "0755"
-  when: adguardhome_needs_install
-
-## Restore config and data after update
-- name: adguardhome | Restore config from backup
-  ansible.builtin.copy:
-    src: "{{ adguardhome_backup_dir }}/AdGuardHome.yaml"
-    dest: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
-    remote_src: true
-    owner: root
-    group: root
-    mode: "0600"
-  when:
-    - adguardhome_needs_install
-    - adguardhome_installed.stat.exists
-    - adguardhome_backup_dir is defined
-
-- name: adguardhome | Restore data directory from backup
-  ansible.builtin.copy:
-    src: "{{ adguardhome_backup_dir }}/data/"
-    dest: "{{ adguardhome_install_dir }}/data/"
-    remote_src: true
-    mode: preserve
-  when:
-    - adguardhome_needs_install
-    - adguardhome_installed.stat.exists
-    - adguardhome_backup_dir is defined
-  ignore_errors: true
 
 ## Install as systemd service
 - name: adguardhome | Check if AdGuard Home service exists
@@ -240,7 +208,3 @@
         Password: (defined in adguardhome_admin_pass_hash)
 
       For VPN clients, set DNS to: {{ adguardhome_dns_bind_hosts | first }}
-      {% if adguardhome_backup_dir is defined %}
-
-      Backup location: {{ adguardhome_backup_dir }}
-      {% endif %}

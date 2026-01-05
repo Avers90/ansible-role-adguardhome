@@ -61,11 +61,37 @@ adguardhome_version: "v0.107.71"  # schema_version: 32
 4. Update `templates/AdGuardHome.yaml.j2` if schema changed
 5. Run update
 
-### Version history
+## Updating AdGuard Home
 
-| Role version | AdGuard Home | schema_version |
-|--------------|--------------|----------------|
-| 1.0.0 | v0.107.71 | 32 |
+Update replaces only the binary file, keeping configuration and data intact.
+This follows the [official manual update procedure](https://github.com/AdguardTeam/AdGuardHome/wiki/FAQ#manual-update).
+
+### What happens during update
+
+1. Download new version archive
+2. Stop AdGuard Home service
+3. Backup current binary (`AdGuardHome.backup.<version>`)
+4. Extract and replace only the binary
+5. Start service
+
+### What's preserved
+
+- `AdGuardHome.yaml` - configuration
+- `data/` - databases, statistics, query logs, downloaded filters
+
+### Rollback
+
+```bash
+systemctl stop AdGuardHome
+mv /opt/AdGuardHome/AdGuardHome.backup.v0.107.71 /opt/AdGuardHome/AdGuardHome
+systemctl start AdGuardHome
+```
+
+### List binary backups
+
+```bash
+ls -la /opt/AdGuardHome/AdGuardHome.backup.*
+```
 
 ## Password Hash Generation
 
@@ -89,7 +115,7 @@ wireguard_dns: "10.0.0.1"
 
 adguardhome_admin_user: "admin"
 adguardhome_admin_pass_hash: "{{ vault_adguardhome_pass_hash }}"
-adguardhome_language: "ru"
+adguardhome_language: "en"
 ```
 
 ### Custom filters
@@ -110,52 +136,10 @@ adguardhome_filters:
 
 ```yaml
 adguardhome_user_rules:
-  # Messengers
-  - "@@||telegram.org^$important"
-  - "@@||*.telegram.org^$important"
-  - "@@||t.me^$important"
-```
-
-## Backup and Restore
-
-### Backup location
-
-When updating, a full backup is created:
-
-```
-/opt/AdGuardHome.backup.<version>.<timestamp>/
-```
-
-Example:
-
-```
-/opt/AdGuardHome.backup.v0.107.71.20240115T143022/
-```
-
-### What's included in backup
-
-- `AdGuardHome.yaml` - configuration
-- `data/` - databases, statistics, query logs, downloaded filters
-
-### List backups
-
-```bash
-ls -la /opt/ | grep AdGuardHome.backup
-```
-
-### Manual rollback
-
-```bash
-systemctl stop AdGuardHome
-rm -rf /opt/AdGuardHome
-mv /opt/AdGuardHome.backup.v0.107.71.20240115T143022 /opt/AdGuardHome
-systemctl start AdGuardHome
-```
-
-### Clean old backups
-
-```bash
-rm -rf /opt/AdGuardHome.backup.*
+  - '## Messengers'
+  - '@@||telegram.org^$important'
+  - '@@||*.telegram.org^$important'
+  - '@@||t.me^$important'
 ```
 
 ## Service Management
@@ -174,11 +158,12 @@ systemctl restart AdGuardHome
 /opt/AdGuardHome/AdGuardHome --version
 ```
 
-## Files Modified
+## Files
 
 | File | Description |
 |------|-------------|
 | `/opt/AdGuardHome/` | Installation directory |
+| `/opt/AdGuardHome/AdGuardHome` | Binary |
 | `/opt/AdGuardHome/AdGuardHome.yaml` | Configuration |
 | `/opt/AdGuardHome/data/` | Databases and filters |
 | `/etc/resolv.conf` | DNS configuration |
@@ -187,10 +172,10 @@ systemctl restart AdGuardHome
 
 ## Configuration Management
 
-- Initial config is deployed via template
+- Initial config is deployed via template on fresh install
 - After first run, manage settings through Web UI
 - Config will NOT be overwritten on subsequent runs
-- On update, config and data are preserved from backup
+- On update, only binary is replaced — config and data are preserved
 
 ## Troubleshooting
 
@@ -215,6 +200,12 @@ Should contain fallback DNS servers.
 1. Check service: `systemctl status AdGuardHome`
 2. Check port: `ss -tlnp | grep 3000`
 3. Connect via VPN first, then access `http://10.10.0.1:3000`
+
+### Check binary version after update
+
+```bash
+/opt/AdGuardHome/AdGuardHome --version
+```
 
 ## License
 
