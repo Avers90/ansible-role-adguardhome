@@ -1,0 +1,83 @@
+---
+## AdGuard Home version (e.g., "v0.107.52" or "latest")
+# adguardhome_version: "latest"
+adguardhome_version: "v0.107.71"
+
+## Force update even if already installed
+adguardhome_update: false
+
+## Installation directory
+adguardhome_install_dir: /opt/AdGuardHome
+
+## Disable systemd-resolved (frees port 53)
+adguardhome_disable_resolved: true
+
+## Configure /etc/resolv.conf
+adguardhome_configure_resolv: true
+
+## DNS servers for the host itself (before AdGuard Home starts)
+adguardhome_fallback_dns:
+  - "1.1.1.1"
+  - "8.8.8.8"
+
+## Deploy initial config (only if not exists)
+adguardhome_deploy_config: true
+
+# Web UI settings
+# Extract IP from wireguard_address (10.0.0.1/24 -> 10.0.0.1)
+adguardhome_web_host: "{{ wireguard_address | default('10.0.0.1/24') | ansible.utils.ipaddr('address') }}"
+adguardhome_web_port: 3000
+
+## Admin credentials
+adguardhome_admin_user: "admin"
+## Password hash generated with: htpasswd -B -n -b "" password | cut -d: -f2
+adguardhome_admin_pass_hash: "$2y$10$example_hash_change_me"
+
+## Language and theme
+adguardhome_language: "en"
+adguardhome_theme: "auto"
+
+# DNS settings
+# Extract IP from wireguard_address (10.0.0.1/24 -> 10.0.0.1)
+adguardhome_dns_bind_hosts:
+  - "{{ wireguard_address | default('10.0.0.1/24') | ansible.utils.ipaddr('address') }}"
+adguardhome_dns_port: 53
+
+## Upstream DNS (DoH/DoT)
+adguardhome_upstream_dns:
+  - "https://dns.cloudflare.com/dns-query"
+  - "https://dns.google/dns-query"
+  - "tls://dns.quad9.net/dns-query"
+
+## Bootstrap DNS (for resolving DoH/DoT hostnames)
+adguardhome_bootstrap_dns:
+  - "1.1.1.1"
+  - "8.8.8.8"
+
+## Fallback DNS
+adguardhome_dns_fallback:
+  - "tls://dns.quad9.net"
+  - "https://dns.cloudflare.com/dns-query"
+
+## DNS cache settings
+adguardhome_cache_size: 10000000
+adguardhome_cache_ttl_min: 300
+adguardhome_cache_ttl_max: 86400
+
+## Security
+adguardhome_dnssec: true
+adguardhome_ratelimit: 30
+
+## Filters
+adguardhome_filters:
+  - enabled: true
+    url: "https://adguardteam.github.io/HostlistsRegistry/assets/filter_1.txt"
+    name: "AdGuard DNS filter"
+    id: 1
+  - enabled: true
+    url: "https://adguardteam.github.io/HostlistsRegistry/assets/filter_2.txt"
+    name: "AdAway Default Blocklist"
+    id: 2
+
+## User rules (whitelist)
+adguardhome_user_rules: []

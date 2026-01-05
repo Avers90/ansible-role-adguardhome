@@ -1,0 +1,267 @@
+---
+- name: adguardhome | Fail if distro is not supported
+  ansible.builtin.fail:
+    msg: "Distribution '{{ ansible_distribution }}' is not supported. Supported: Debian, Ubuntu"
+  when: ansible_distribution not in ['Debian', 'Ubuntu']
+
+- name: adguardhome | Install dependencies
+  ansible.builtin.apt:
+    name:
+      - curl
+      - ca-certificates
+      - tar
+    state: present
+    update_cache: true
+
+- name: adguardhome | Check if AdGuard Home is already installed
+  ansible.builtin.stat:
+    path: "{{ adguardhome_install_dir }}/AdGuardHome"
+  register: adguardhome_installed
+
+- name: adguardhome | Get current installed version
+  ansible.builtin.shell: "{{ adguardhome_install_dir }}/AdGuardHome --version | grep -oP 'v[0-9]+\\.[0-9]+\\.[0-9]+'"
+  register: adguardhome_current_version
+  changed_when: false
+  failed_when: false
+  when: adguardhome_installed.stat.exists
+
+- name: adguardhome | Display installation status
+  ansible.builtin.debug:
+    msg: "AdGuard Home is {{ 'installed (version ' + adguardhome_current_version.stdout | default('unknown') + ')' if adguardhome_installed.stat.exists else 'not installed' }}."
+
+## Disable systemd-resolved to free port 53
+- name: adguardhome | Check if systemd-resolved is running
+  ansible.builtin.systemd:
+    name: systemd-resolved
+  register: resolved_status
+  ignore_errors: true
+  when: adguardhome_disable_resolved
+
+- name: adguardhome | Stop systemd-resolved
+  ansible.builtin.systemd:
+    name: systemd-resolved
+    state: stopped
+    enabled: false
+  when:
+    - adguardhome_disable_resolved
+    - resolved_status.status is defined
+    - resolved_status.status.ActiveState is defined
+    - resolved_status.status.ActiveState == "active"
+
+- name: adguardhome | Backup original /etc/resolv.conf
+  ansible.builtin.copy:
+    src: /etc/resolv.conf
+    dest: /etc/resolv.conf.orig
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+  when: adguardhome_configure_resolv
+
+- name: adguardhome | Remove symlink /etc/resolv.conf if exists
+  ansible.builtin.file:
+    path: /etc/resolv.conf
+    state: absent
+  when: adguardhome_configure_resolv
+
+- name: adguardhome | Create static /etc/resolv.conf
+  ansible.builtin.copy:
+    content: |
+      # {{ ansible_managed }}
+      # Fallback DNS servers
+      {% for dns in adguardhome_fallback_dns %}
+      nameserver {{ dns }}
+      {% endfor %}
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: adguardhome_configure_resolv
+
+## Determine version to install
+- name: adguardhome | Set architecture fact
+  ansible.builtin.set_fact:
+    adguardhome_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' if ansible_architecture == 'aarch64' else ansible_architecture }}"
+
+- name: adguardhome | Get latest version from GitHub API
+  ansible.builtin.uri:
+    url: https://api.github.com/repos/AdguardTeam/AdGuardHome/releases/latest
+    return_content: true
+  register: adguardhome_latest_release
+  when: adguardhome_version == "latest"
+
+- name: adguardhome | Set version fact (latest)
+  ansible.builtin.set_fact:
+    adguardhome_version_actual: "{{ adguardhome_latest_release.json.tag_name }}"
+  when: adguardhome_version == "latest"
+
+- name: adguardhome | Set version fact (specific)
+  ansible.builtin.set_fact:
+    adguardhome_version_actual: "{{ adguardhome_version }}"
+  when: adguardhome | adguardhome_version != "latest"
+
+- name: adguardhome | Check if update is needed
+  ansible.builtin.set_fact:
+    adguardhome_needs_install: "{{ not adguardhome_installed.stat.exists or (adguardhome_update and adguardhome_current_version.stdout | default('') != adguardhome_version_actual) }}"
+
+- name: adguardhome | Display version information
+  ansible.builtin.debug:
+    msg: |
+      Current version: {{ adguardhome_current_version.stdout | default('not installed') }}
+      Target version: {{ adguardhome_version_actual }}
+      Update mode: {{ adguardhome_update }}
+      Will install/update: {{ adguardhome_needs_install }}
+
+## Backup before update
+- name: adguardhome | Set backup directory name
+  ansible.builtin.set_fact:
+    adguardhome_backup_dir: "{{ adguardhome_install_dir }}.backup.{{ adguardhome_current_version.stdout }}.{{ ansible_date_time.iso8601_basic_short }}"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Stop AdGuard Home before update
+  ansible.builtin.systemd:
+    name: AdGuardHome
+    state: stopped
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+  ignore_errors: true
+
+- name: adguardhome | Backup entire AdGuard Home directory
+  ansible.builtin.copy:
+    src: "{{ adguardhome_install_dir }}/"
+    dest: "{{ adguardhome_backup_dir }}/"
+    remote_src: true
+    mode: preserve
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Display backup location
+  ansible.builtin.debug:
+    msg: "Backup created at: {{ adguardhome_backup_dir }}"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+## Download and install/update AdGuard Home
+- name: adguardhome | Create installation directory
+  ansible.builtin.file:
+    path: "{{ adguardhome_install_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: adguardhome_needs_install
+
+- name: adguardhome | Download AdGuard Home
+  ansible.builtin.get_url:
+    url: "https://github.com/AdguardTeam/AdGuardHome/releases/download/{{ adguardhome_version_actual }}/AdGuardHome_linux_{{ adguardhome_arch }}.tar.gz"
+    dest: /tmp/AdGuardHome.tar.gz
+    mode: "0644"
+  when: adguardhome_needs_install
+
+- name: adguardhome | Extract AdGuard Home
+  ansible.builtin.unarchive:
+    src: /tmp/AdGuardHome.tar.gz
+    dest: /opt
+    remote_src: true
+  when: adguardhome_needs_install
+
+- name: adguardhome | Remove downloaded archive
+  ansible.builtin.file:
+    path: /tmp/AdGuardHome.tar.gz
+    state: absent
+
+- name: adguardhome | Set permissions on AdGuard Home binary
+  ansible.builtin.file:
+    path: "{{ adguardhome_install_dir }}/AdGuardHome"
+    owner: root
+    group: root
+    mode: "0755"
+  when: adguardhome_needs_install
+
+## Restore config and data after update
+- name: adguardhome | Restore config from backup
+  ansible.builtin.copy:
+    src: "{{ adguardhome_backup_dir }}/AdGuardHome.yaml"
+    dest: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+    - adguardhome_backup_dir is defined
+
+- name: adguardhome | Restore data directory from backup
+  ansible.builtin.copy:
+    src: "{{ adguardhome_backup_dir }}/data/"
+    dest: "{{ adguardhome_install_dir }}/data/"
+    remote_src: true
+    mode: preserve
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+    - adguardhome_backup_dir is defined
+  ignore_errors: true
+
+## Install as systemd service
+- name: adguardhome | Check if AdGuard Home service exists
+  ansible.builtin.stat:
+    path: /etc/systemd/system/AdGuardHome.service
+  register: adguardhome_service
+
+- name: adguardhome | Install AdGuard Home as systemd service
+  ansible.builtin.shell: ./AdGuardHome -s install
+  args:
+    chdir: "{{ adguardhome_install_dir }}"
+  when: not adguardhome_service.stat.exists
+
+## Deploy initial configuration (only for fresh install)
+- name: adguardhome | Check if AdGuard Home config exists
+  ansible.builtin.stat:
+    path: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+  register: adguardhome_config
+
+- name: adguardhome | Deploy AdGuard Home configuration
+  ansible.builtin.template:
+    src: AdGuardHome.yaml.j2
+    dest: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+  when:
+    - adguardhome_deploy_config
+    - not adguardhome_config.stat.exists
+  notify: Restart AdGuardHome
+
+- name: adguardhome | Ensure AdGuard Home service is enabled and started
+  ansible.builtin.systemd:
+    name: AdGuardHome
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: adguardhome | Display access information
+  ansible.builtin.debug:
+    msg: |
+      AdGuard Home {{ adguardhome_version_actual }} installed successfully!
+
+      Web UI: http://{{ adguardhome_web_host }}:{{ adguardhome_web_port }}
+      DNS: {{ adguardhome_dns_bind_hosts | join(', ') }}:{{ adguardhome_dns_port }}
+
+      Credentials:
+        Username: {{ adguardhome_admin_user }}
+        Password: (defined in adguardhome_admin_pass_hash)
+
+      For VPN clients, set DNS to: {{ adguardhome_dns_bind_hosts | first }}
+      {% if adguardhome_backup_dir is defined %}
+
+      Backup location: {{ adguardhome_backup_dir }}
+      {% endif %}
