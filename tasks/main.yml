@@ -59,11 +59,20 @@
     force: false
   when: adguardhome_configure_resolv
 
-- name: adguardhome | Remove symlink /etc/resolv.conf if exists
+- name: adguardhome | Check if /etc/resolv.conf is a symlink
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+  register: resolv_conf_stat
+  when: adguardhome_configure_resolv
+
+- name: adguardhome | Remove symlink /etc/resolv.conf
   ansible.builtin.file:
     path: /etc/resolv.conf
     state: absent
-  when: adguardhome_configure_resolv
+  when:
+    - adguardhome_configure_resolv
+    - resolv_conf_stat.stat.islnk is defined
+    - resolv_conf_stat.stat.islnk
 
 - name: adguardhome | Create static /etc/resolv.conf
   ansible.builtin.template:
