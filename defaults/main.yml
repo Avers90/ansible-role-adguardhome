@@ -30,8 +30,12 @@ adguardhome_web_port: 3000
 
 ## Admin credentials
 adguardhome_admin_user: "admin"
-## Password hash generated with: htpasswd -B -n -b "" password | cut -d: -f2
-adguardhome_admin_pass_hash: "$2y$10$example_hash_change_me"
+
+## Password hash (bcrypt)
+## IMPORTANT: Generate your own hash! Example below will fail!
+## Generate with: htpasswd -B -n -b "" 'your-password' | cut -d: -f2
+## Or Python: python3 -c "import bcrypt; print(bcrypt.hashpw(b'your-password', bcrypt.gensalt()).decode())"
+adguardhome_admin_pass_hash: ""
 
 ## Language and theme
 adguardhome_language: "en"

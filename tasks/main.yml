@@ -34,7 +34,7 @@
   ansible.builtin.systemd:
     name: systemd-resolved
   register: resolved_status
-  ignore_errors: true
+  failed_when: false
   when: adguardhome_disable_resolved
 
 - name: adguardhome | Stop systemd-resolved
@@ -142,6 +142,7 @@
     tar -xzf /tmp/AdGuardHome.tar.gz -C /tmp AdGuardHome/AdGuardHome
     mv /tmp/AdGuardHome/AdGuardHome {{ adguardhome_install_dir }}/AdGuardHome
     rm -rf /tmp/AdGuardHome
+  changed_when: true
   when:
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
@@ -176,6 +177,7 @@
   ansible.builtin.shell: ./AdGuardHome -s install
   args:
     chdir: "{{ adguardhome_install_dir }}"
+  changed_when: true
   when: not adguardhome_service.stat.exists
 
 ## Deploy initial configuration (only for fresh install)
@@ -183,6 +185,14 @@
   ansible.builtin.stat:
     path: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
   register: adguardhome_config
+
+- name: adguardhome | Validate password hash is set
+  ansible.builtin.fail:
+    msg: "adguardhome_admin_pass_hash is required. Generate with: htpasswd -B -n -b '' 'password' | cut -d: -f2"
+  when:
+    - adguardhome_deploy_config
+    - not adguardhome_config.stat.exists
+    - adguardhome_admin_pass_hash == ""
 
 - name: adguardhome | Deploy AdGuard Home configuration
   ansible.builtin.template:
@@ -195,6 +205,7 @@
   when:
     - adguardhome_deploy_config
     - not adguardhome_config.stat.exists
+  no_log: true
   notify: Restart AdGuardHome
 
 - name: adguardhome | Ensure AdGuard Home service is enabled and started
