@@ -1,8 +1,8 @@
 ---
 - name: adguardhome | Fail if distro is not supported
   ansible.builtin.fail:
-    msg: "Distribution '{{ ansible_distribution }}' is not supported. Supported: Debian, Ubuntu"
-  when: ansible_distribution not in ['Debian', 'Ubuntu']
+    msg: "Distribution '{{ ansible_facts['distribution'] }}' is not supported. Supported: Debian, Ubuntu"
+  when: ansible_facts['distribution'] not in ['Debian', 'Ubuntu']
 
 - name: adguardhome | Install dependencies
   ansible.builtin.apt:
@@ -35,7 +35,7 @@
     name: systemd-resolved
   register: resolved_status
   failed_when: false
-  when: adguardhome_disable_resolved
+  when: adguardhome_disable_resolved | bool
 
 - name: adguardhome | Stop systemd-resolved
   ansible.builtin.systemd:
@@ -43,7 +43,7 @@
     state: stopped
     enabled: false
   when:
-    - adguardhome_disable_resolved
+    - adguardhome_disable_resolved | bool
     - resolved_status.status is defined
     - resolved_status.status.ActiveState is defined
     - resolved_status.status.ActiveState == "active"
@@ -57,20 +57,20 @@
     group: root
     mode: "0644"
     force: false
-  when: adguardhome_configure_resolv
+  when: adguardhome_configure_resolv | bool
 
 - name: adguardhome | Check if /etc/resolv.conf is a symlink
   ansible.builtin.stat:
     path: /etc/resolv.conf
   register: resolv_conf_stat
-  when: adguardhome_configure_resolv
+  when: adguardhome_configure_resolv | bool
 
 - name: adguardhome | Remove symlink /etc/resolv.conf
   ansible.builtin.file:
     path: /etc/resolv.conf
     state: absent
   when:
-    - adguardhome_configure_resolv
+    - adguardhome_configure_resolv | bool
     - resolv_conf_stat.stat.islnk is defined
     - resolv_conf_stat.stat.islnk
 
@@ -81,12 +81,12 @@
     owner: root
     group: root
     mode: "0644"
-  when: adguardhome_configure_resolv
+  when: adguardhome_configure_resolv | bool
 
 ## Determine architecture
 - name: adguardhome | Set architecture fact
   ansible.builtin.set_fact:
-    adguardhome_arch: "{{ 'amd64' if ansible_architecture == 'x86_64' else 'arm64' if ansible_architecture == 'aarch64' else ansible_architecture }}"
+    adguardhome_arch: "{{ 'amd64' if ansible_facts['architecture'] == 'x86_64' else 'arm64' if ansible_facts['architecture'] == 'aarch64' else ansible_facts['architecture'] }}"
 
 ## Check if update is needed
 - name: adguardhome | Check if update is needed
