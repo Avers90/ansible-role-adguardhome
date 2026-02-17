@@ -118,7 +118,7 @@
     - adguardhome_needs_install
     - not adguardhome_installed.stat.exists
 
-## Update: replace only binary
+## Update: backup and replace binary
 - name: adguardhome | Stop AdGuard Home before update
   ansible.builtin.systemd:
     name: AdGuardHome
@@ -127,15 +127,37 @@
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
 
-- name: adguardhome | Backup current binary
+- name: adguardhome | Backup entire installation directory before update
   ansible.builtin.copy:
-    src: "{{ adguardhome_install_dir }}/AdGuardHome"
-    dest: "{{ adguardhome_install_dir }}/AdGuardHome.backup.{{ adguardhome_current_version.stdout }}"
+    src: "{{ adguardhome_install_dir }}/"
+    dest: "{{ adguardhome_install_dir }}.backup.{{ adguardhome_current_version.stdout }}"
     remote_src: true
-    mode: "0755"
+    mode: preserve
   when:
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
+
+- name: adguardhome | Find old backup directories
+  ansible.builtin.find:
+    paths: "{{ adguardhome_install_dir | dirname }}"
+    patterns: "{{ adguardhome_install_dir | basename }}.backup.*"
+    file_type: directory
+  register: adguardhome_backups
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Remove old backups (keep last 3)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ (adguardhome_backups.files | sort(attribute='mtime') | list)[:-3] }}"
+  loop_control:
+    label: "{{ item.path }}"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+    - adguardhome_backups.files | length > 3
 
 - name: adguardhome | Extract only binary from archive (update)
   ansible.builtin.shell: |

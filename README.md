@@ -70,28 +70,46 @@ This follows the [official manual update procedure](https://github.com/AdguardTe
 
 1. Download new version archive
 2. Stop AdGuard Home service
-3. Backup current binary (`AdGuardHome.backup.<version>`)
-4. Extract and replace only the binary
-5. Start service
+3. **Backup entire installation directory** to `/opt/AdGuardHome.backup.<version>/`
+4. Auto-cleanup old backups (keeps last 3)
+5. Extract and replace only the binary
+6. Start service
 
-### What's preserved
+### What's backed up
 
+Full directory copy including:
+- `AdGuardHome` - binary
 - `AdGuardHome.yaml` - configuration
 - `data/` - databases, statistics, query logs, downloaded filters
 
 ### Rollback
 
+Full rollback to previous version:
+
 ```bash
 systemctl stop AdGuardHome
-mv /opt/AdGuardHome/AdGuardHome.backup.v0.107.71 /opt/AdGuardHome/AdGuardHome
+rm -rf /opt/AdGuardHome
+mv /opt/AdGuardHome.backup.v0.107.71 /opt/AdGuardHome
 systemctl start AdGuardHome
 ```
 
-### List binary backups
+Or rollback only binary (keep current config/data):
 
 ```bash
-ls -la /opt/AdGuardHome/AdGuardHome.backup.*
+systemctl stop AdGuardHome
+cp /opt/AdGuardHome.backup.v0.107.71/AdGuardHome /opt/AdGuardHome/AdGuardHome
+systemctl start AdGuardHome
 ```
+
+### List backups
+
+```bash
+ls -la /opt/ | grep AdGuardHome.backup
+```
+
+### Backup retention
+
+Only the last 3 backups are kept. Older backups are automatically removed during update.
 
 ## Password Hash Generation
 
@@ -166,6 +184,7 @@ systemctl restart AdGuardHome
 | `/opt/AdGuardHome/AdGuardHome` | Binary |
 | `/opt/AdGuardHome/AdGuardHome.yaml` | Configuration |
 | `/opt/AdGuardHome/data/` | Databases and filters |
+| `/opt/AdGuardHome.backup.<version>/` | Full backup directories (last 3 kept) |
 | `/etc/resolv.conf` | DNS configuration |
 | `/etc/resolv.conf.orig` | Backup of original |
 | `/etc/systemd/system/AdGuardHome.service` | Systemd service |
