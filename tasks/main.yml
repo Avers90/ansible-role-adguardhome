@@ -127,10 +127,40 @@
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
 
-- name: adguardhome | Backup entire installation directory before update
+- name: adguardhome | Create backup directory before update
+  ansible.builtin.file:
+    path: "{{ adguardhome_install_dir }}.backup.{{ adguardhome_current_version.stdout }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Backup binary, config and data before update
   ansible.builtin.copy:
-    src: "{{ adguardhome_install_dir }}/"
-    dest: "{{ adguardhome_install_dir }}.backup.{{ adguardhome_current_version.stdout }}"
+    src: "{{ item.src }}"
+    dest: "{{ adguardhome_install_dir }}.backup.{{ adguardhome_current_version.stdout }}/{{ item.dest }}"
+    remote_src: true
+    mode: preserve
+  loop:
+    - src: "{{ adguardhome_install_dir }}/AdGuardHome"
+      dest: "AdGuardHome"
+    - src: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+      dest: "AdGuardHome.yaml"
+    - src: "{{ adguardhome_install_dir }}/data/"
+      dest: "data/"
+  loop_control:
+    label: "{{ item.dest }}"
+  when:
+    - adguardhome_needs_install
+    - adguardhome_installed.stat.exists
+
+- name: adguardhome | Backup config file with version suffix before update
+  ansible.builtin.copy:
+    src: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+    dest: "{{ adguardhome_install_dir }}/AdGuardHome.yaml.{{ adguardhome_current_version.stdout }}"
     remote_src: true
     mode: preserve
   when:
@@ -165,6 +195,7 @@
     mv /tmp/AdGuardHome/AdGuardHome {{ adguardhome_install_dir }}/AdGuardHome
     rm -rf /tmp/AdGuardHome
   changed_when: true
+  notify: Restart AdGuardHome
   when:
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
@@ -223,10 +254,10 @@
     owner: root
     group: root
     mode: "0600"
-    force: false
+    force: true
   when:
     - adguardhome_deploy_config
-    - not adguardhome_config.stat.exists
+    - not adguardhome_installed.stat.exists
   no_log: true
   notify: Restart AdGuardHome
 

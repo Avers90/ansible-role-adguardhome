@@ -19,12 +19,13 @@ Other distributions will fail with an error message.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `adguardhome_version` | `v0.107.71` | Version to install (always exact) |
+| `adguardhome_schema_version` | `32` | Config schema version (must match `adguardhome_version`) |
 | `adguardhome_update` | `false` | Force update if installed |
 | `adguardhome_install_dir` | `/opt/AdGuardHome` | Installation directory |
 | `adguardhome_disable_resolved` | `true` | Disable systemd-resolved |
 | `adguardhome_configure_resolv` | `true` | Configure /etc/resolv.conf |
 | `adguardhome_fallback_dns` | `[1.1.1.1, 8.8.8.8]` | Fallback DNS servers |
-| `adguardhome_deploy_config` | `true` | Deploy initial config |
+| `adguardhome_deploy_config` | `true` | Deploy initial config (fresh install only) |
 | `adguardhome_web_host` | from `wireguard_address` | Web UI listen address |
 | `adguardhome_web_port` | `3000` | Web UI port |
 | `adguardhome_admin_user` | `admin` | Admin username |
@@ -44,21 +45,22 @@ Other distributions will fail with an error message.
 
 **Important:** Always specify exact version in `defaults/main.yml`.
 
-The template `AdGuardHome.yaml.j2` is tied to specific `schema_version`.
-When updating AdGuard Home, you may need to update the template as well.
+The template `AdGuardHome.yaml.j2` uses `adguardhome_schema_version` — keep it in sync with `adguardhome_version`.
+AdGuard Home auto-migrates the config on startup when schema changes, but the template is only applied on fresh installs.
 
 ### Current version
 
 ```yaml
-adguardhome_version: "v0.107.71"  # schema_version: 32
+adguardhome_version: "v0.107.71"
+adguardhome_schema_version: 32
 ```
 
 ### Updating to new version
 
 1. Check [AdGuard Home releases](https://github.com/AdguardTeam/AdGuardHome/releases)
-2. Review changelog for config changes
+2. Review changelog for config schema changes
 3. Update `adguardhome_version` in `defaults/main.yml`
-4. Update `templates/AdGuardHome.yaml.j2` if schema changed
+4. If schema changed: update `adguardhome_schema_version` and `templates/AdGuardHome.yaml.j2`
 5. Run update
 
 ## Updating AdGuard Home
@@ -70,17 +72,24 @@ This follows the [official manual update procedure](https://github.com/AdguardTe
 
 1. Download new version archive
 2. Stop AdGuard Home service
-3. **Backup entire installation directory** to `/opt/AdGuardHome.backup.<version>/`
-4. Auto-cleanup old backups (keeps last 3)
-5. Extract and replace only the binary
-6. Start service
+3. **Backup binary, config and data** to `/opt/AdGuardHome.backup.<version>/`
+4. **Save config snapshot** as `/opt/AdGuardHome/AdGuardHome.yaml.<version>` (pre-migration copy)
+5. Auto-cleanup old backups (keeps last 3)
+6. Extract and replace only the binary
+7. Restart service
 
 ### What's backed up
 
-Full directory copy including:
-- `AdGuardHome` - binary
-- `AdGuardHome.yaml` - configuration
+Per-version backup directory `/opt/AdGuardHome.backup.<version>/` contains:
+- `AdGuardHome` - binary of the old version
+- `AdGuardHome.yaml` - config before the new binary starts (pre-schema-migration)
 - `data/` - databases, statistics, query logs, downloaded filters
+
+Additionally, a quick-access config snapshot is saved in-place:
+- `/opt/AdGuardHome/AdGuardHome.yaml.<version>` - config before migration, no need to unpack backup
+
+**Note:** AdGuard Home automatically migrates `AdGuardHome.yaml` on startup when `schema_version` changes.
+The backup and snapshot are taken before the new binary starts, so they always contain the pre-migration config.
 
 ### Rollback
 
@@ -88,8 +97,8 @@ Full rollback to previous version:
 
 ```bash
 systemctl stop AdGuardHome
-rm -rf /opt/AdGuardHome
-mv /opt/AdGuardHome.backup.v0.107.71 /opt/AdGuardHome
+cp /opt/AdGuardHome.backup.v0.107.71/AdGuardHome /opt/AdGuardHome/AdGuardHome
+cp /opt/AdGuardHome.backup.v0.107.71/AdGuardHome.yaml /opt/AdGuardHome/AdGuardHome.yaml
 systemctl start AdGuardHome
 ```
 
@@ -183,18 +192,21 @@ systemctl restart AdGuardHome
 | `/opt/AdGuardHome/` | Installation directory |
 | `/opt/AdGuardHome/AdGuardHome` | Binary |
 | `/opt/AdGuardHome/AdGuardHome.yaml` | Configuration |
+| `/opt/AdGuardHome/AdGuardHome.yaml.<version>` | Config snapshot before update (pre-schema-migration) |
 | `/opt/AdGuardHome/data/` | Databases and filters |
-| `/opt/AdGuardHome.backup.<version>/` | Full backup directories (last 3 kept) |
+| `/opt/AdGuardHome.backup.<version>/` | Backup directory per version (last 3 kept): binary + yaml + data/ |
 | `/etc/resolv.conf` | DNS configuration |
 | `/etc/resolv.conf.orig` | Backup of original |
 | `/etc/systemd/system/AdGuardHome.service` | Systemd service |
 
 ## Configuration Management
 
-- Initial config is deployed via template on fresh install
+- Initial config is deployed via template on **fresh install only** (when binary was not present before)
 - After first run, manage settings through Web UI
-- Config will NOT be overwritten on subsequent runs
+- Config will NOT be overwritten on subsequent runs or updates
 - On update, only binary is replaced — config and data are preserved
+- AdGuard Home auto-migrates `AdGuardHome.yaml` on startup if `schema_version` changes
+- A pre-migration snapshot `AdGuardHome.yaml.<old_version>` is saved before each update
 
 ## Troubleshooting
 
