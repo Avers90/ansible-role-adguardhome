@@ -19,7 +19,7 @@ Other distributions will fail with an error message.
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `adguardhome_version` | `v0.107.71` | Version to install (always exact) |
-| `adguardhome_schema_version` | `32` | Config schema version (must match `adguardhome_version`) |
+| `adguardhome_schema_version` | `32` | Config schema version for initial template (fresh install only) |
 | `adguardhome_update` | `false` | Force update if installed |
 | `adguardhome_install_dir` | `/opt/AdGuardHome` | Installation directory |
 | `adguardhome_disable_resolved` | `true` | Disable systemd-resolved |
@@ -45,23 +45,22 @@ Other distributions will fail with an error message.
 
 **Important:** Always specify exact version in `defaults/main.yml`.
 
-The template `AdGuardHome.yaml.j2` uses `adguardhome_schema_version` — keep it in sync with `adguardhome_version`.
-AdGuard Home auto-migrates the config on startup when schema changes, but the template is only applied on fresh installs.
+The template `AdGuardHome.yaml.j2` uses `adguardhome_schema_version` — it is applied **only on fresh installs**.
+On updates, AdGuard Home automatically migrates `AdGuardHome.yaml` to the new schema on startup.
 
 ### Current version
 
 ```yaml
 adguardhome_version: "v0.107.71"
-adguardhome_schema_version: 32
+adguardhome_schema_version: 32  # used only for fresh installs
 ```
 
 ### Updating to new version
 
 1. Check [AdGuard Home releases](https://github.com/AdguardTeam/AdGuardHome/releases)
-2. Review changelog for config schema changes
-3. Update `adguardhome_version` in `defaults/main.yml`
-4. If schema changed: update `adguardhome_schema_version` and `templates/AdGuardHome.yaml.j2`
-5. Run update
+2. Update `adguardhome_version` in `defaults/main.yml`
+3. If you want fresh installs to use the new schema: update `adguardhome_schema_version` and `templates/AdGuardHome.yaml.j2`
+4. Run update — AGH will auto-migrate the existing config on startup
 
 ## Updating AdGuard Home
 

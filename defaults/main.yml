@@ -2,9 +2,9 @@
 ## AdGuard Home version (always specify exact version!)
 adguardhome_version: "v0.107.71"
 
-## Config schema version - must match adguardhome_version
-## AdGuard Home auto-migrates config on startup if schema changed
-## Update both variables together when upgrading to a new version
+## Config schema version - used only in the initial config template (fresh install)
+## AdGuard Home automatically migrates the config on startup when schema changes
+## Only relevant for new installations; has no effect on updates
 adguardhome_schema_version: 32
 
 ## Force update even if already installed
