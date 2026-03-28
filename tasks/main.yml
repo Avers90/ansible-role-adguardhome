@@ -190,15 +190,21 @@
     - adguardhome_backups.files | length > 3
 
 - name: adguardhome | Extract only binary from archive (update)
-  ansible.builtin.shell: |
-    tar -xzf /tmp/AdGuardHome.tar.gz -C /tmp AdGuardHome/AdGuardHome
-    mv /tmp/AdGuardHome/AdGuardHome {{ adguardhome_install_dir }}/AdGuardHome
-    rm -rf /tmp/AdGuardHome
+  ansible.builtin.shell:
+    cmd: tar -xzf /tmp/AdGuardHome.tar.gz --strip-components=1 -C {{ adguardhome_install_dir }} --wildcards '*/AdGuardHome'
   changed_when: true
   notify: Restart AdGuardHome
   when:
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
+
+- name: adguardhome | Verify installed version matches target
+  ansible.builtin.shell: "{{ adguardhome_install_dir }}/AdGuardHome --version | grep -oP 'v[0-9]+\\.[0-9]+\\.[0-9]+'"
+  register: adguardhome_installed_version
+  changed_when: false
+  failed_when: adguardhome_installed_version.stdout != adguardhome_version
+  when:
+    - adguardhome_needs_install
 
 - name: adguardhome | Remove downloaded archive
   ansible.builtin.file:
