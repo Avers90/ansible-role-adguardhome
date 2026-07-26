@@ -6,6 +6,13 @@ http:
     enabled: false
   address: {{ adguardhome_web_host }}:{{ adguardhome_web_port }}
   session_ttl: 720h
+  doh:
+    insecure_enabled: false
+    routes:
+      - GET /dns-query
+      - POST /dns-query
+      - GET /dns-query/{ClientID}
+      - POST /dns-query/{ClientID}
 
 users:
   - name: {{ adguardhome_admin_user }}
@@ -94,7 +101,6 @@ tls:
   port_dns_over_quic: 853
   port_dnscrypt: 0
   dnscrypt_config_file: ""
-  allow_unencrypted_doh: false
   certificate_chain: ""
   private_key: ""
   certificate_path: ""
@@ -104,6 +110,7 @@ tls:
 querylog:
   dir_path: ""
   ignored: []
+  ignored_enabled: true
   interval: 24h
   size_memory: 1000
   enabled: true
@@ -112,6 +119,7 @@ querylog:
 statistics:
   dir_path: ""
   ignored: []
+  ignored_enabled: true
   interval: 24h
   enabled: true
 
@@ -179,6 +187,7 @@ filtering:
   safesearch_cache_size: 1048576
   parental_cache_size: 1048576
   cache_time: 30
+  max_http_size: 256MB
   filters_update_interval: 24
   blocked_response_ttl: 10
   filtering_enabled: true

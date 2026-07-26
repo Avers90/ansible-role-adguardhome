@@ -18,8 +18,8 @@ Other distributions will fail with an error message.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `adguardhome_version` | `v0.107.71` | Version to install (always exact) |
-| `adguardhome_schema_version` | `32` | Config schema version for initial template (fresh install only) |
+| `adguardhome_version` | `v0.107.78` | Version to install (always exact) |
+| `adguardhome_schema_version` | `34` | Config schema version for initial template (fresh install only) |
 | `adguardhome_update` | `false` | Force update if installed |
 | `adguardhome_install_dir` | `/opt/AdGuardHome` | Installation directory |
 | `adguardhome_disable_resolved` | `true` | Disable systemd-resolved |
@@ -51,8 +51,8 @@ On updates, AdGuard Home automatically migrates `AdGuardHome.yaml` to the new sc
 ### Current version
 
 ```yaml
-adguardhome_version: "v0.107.71"
-adguardhome_schema_version: 32  # used only for fresh installs
+adguardhome_version: "v0.107.78"
+adguardhome_schema_version: 34  # used only for fresh installs
 ```
 
 ### Updating to new version
