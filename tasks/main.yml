@@ -23,6 +23,7 @@
   register: adguardhome_current_version
   changed_when: false
   failed_when: false
+  check_mode: false
   when: adguardhome_installed.stat.exists
 
 - name: adguardhome | Display installation status
@@ -156,6 +157,7 @@
   when:
     - adguardhome_needs_install
     - adguardhome_installed.stat.exists
+    - not ansible_check_mode
 
 - name: adguardhome | Backup config file with version suffix before update
   ansible.builtin.copy:
