@@ -40,6 +40,7 @@ Other distributions will fail with an error message.
 | `adguardhome_ratelimit` | `30` | Rate limit (requests/sec) |
 | `adguardhome_filters` | AdGuard, AdAway | DNS filters |
 | `adguardhome_user_rules` | `[]` | Custom whitelist rules |
+| `adguardhome_sync_filtering` | `false` | Keep `filters` and `user_rules` of an existing install in sync with the inventory |
 
 ## Version Management
 
@@ -206,6 +207,22 @@ systemctl restart AdGuardHome
 - On update, only binary is replaced — config and data are preserved
 - AdGuard Home auto-migrates `AdGuardHome.yaml` on startup if `schema_version` changes
 - A pre-migration snapshot `AdGuardHome.yaml.<old_version>` is saved before each update
+
+### Syncing filters and user rules
+
+With `adguardhome_sync_filtering: true` the two lists stay managed by the inventory on
+existing installs too:
+
+1. The role reads `AdGuardHome.yaml` and compares `filters` (`enabled`, `url`, `name`, `id`)
+   and `user_rules` with `adguardhome_filters` / `adguardhome_user_rules`.
+2. No difference — nothing happens, the service is not touched.
+3. Difference — the drift is printed, AdGuard Home is stopped, only these two keys are
+   replaced (the previous file is kept as a timestamped backup next to it) and the
+   service is started again. DNS is unavailable for a second or two.
+
+The file is edited only while the service is stopped: AdGuard Home writes its in-memory
+config back on changes and would overwrite an edit made while it runs. Lists changed in
+the Web UI are reverted on the next run — keep them in the inventory.
 
 ## Troubleshooting
 

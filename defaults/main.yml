@@ -89,3 +89,9 @@ adguardhome_filters:
 
 ## User rules (whitelist)
 adguardhome_user_rules: []
+
+## Keep `filters` and `user_rules` of an existing config in sync with the two lists
+## above. Off = they are applied on fresh install only (then managed in the Web UI).
+## On = when they differ, the role stops AdGuard Home, rewrites only these two keys
+## and starts it again (DNS is down for a second or two).
+adguardhome_sync_filtering: false

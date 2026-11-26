@@ -1,0 +1,72 @@
+---
+## Keep `filters` and `user_rules` of an existing AdGuardHome.yaml in sync with the
+## inventory. Everything else in the file (Web UI settings, clients, stats) is kept.
+## AdGuard Home writes its in-memory config back on changes, so the file is only
+## edited while the service is stopped; the stop happens only when the lists differ.
+- name: adguardhome | Read current configuration
+  ansible.builtin.slurp:
+    src: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+  register: adguardhome_sync_raw
+  no_log: true
+
+- name: adguardhome | Compare filters and user rules with the inventory
+  ansible.builtin.set_fact:
+    adguardhome_sync_current: "{{ adguardhome_sync_raw.content | b64decode | from_yaml }}"
+    adguardhome_sync_desired_filters: >-
+      {%- set out = [] -%}
+      {%- for f in adguardhome_filters -%}
+      {%- set _ = out.append({'enabled': f.enabled | bool, 'url': f.url, 'name': f.name, 'id': f.id | int}) -%}
+      {%- endfor -%}
+      {{ out }}
+  no_log: true
+
+- name: adguardhome | Detect drift in filters and user rules
+  ansible.builtin.set_fact:
+    adguardhome_sync_current_filters: >-
+      {%- set out = [] -%}
+      {%- for f in adguardhome_sync_current.filters | default([], true) -%}
+      {%- set _ = out.append({'enabled': f.enabled | bool, 'url': f.url, 'name': f.name, 'id': f.id | int}) -%}
+      {%- endfor -%}
+      {{ out }}
+    adguardhome_sync_current_rules: "{{ adguardhome_sync_current.user_rules | default([], true) }}"
+
+- name: adguardhome | Show filtering drift
+  ansible.builtin.debug:
+    msg:
+      filters_added: "{{ adguardhome_sync_desired_filters | difference(adguardhome_sync_current_filters) | map(attribute='url') | list }}"
+      filters_removed: "{{ adguardhome_sync_current_filters | difference(adguardhome_sync_desired_filters) | map(attribute='url') | list }}"
+      rules_added: "{{ adguardhome_user_rules | difference(adguardhome_sync_current_rules) }}"
+      rules_removed: "{{ adguardhome_sync_current_rules | difference(adguardhome_user_rules) }}"
+  when: >-
+    adguardhome_sync_desired_filters != adguardhome_sync_current_filters
+    or adguardhome_user_rules != adguardhome_sync_current_rules
+
+- name: adguardhome | Apply filters and user rules
+  when: >-
+    adguardhome_sync_desired_filters != adguardhome_sync_current_filters
+    or adguardhome_user_rules != adguardhome_sync_current_rules
+  block:
+    - name: adguardhome | Stop AdGuard Home before editing the config
+      ansible.builtin.systemd:
+        name: AdGuardHome
+        state: stopped
+
+    - name: adguardhome | Write filters and user rules into the config
+      ansible.builtin.copy:
+        content: >-
+          {{ adguardhome_sync_current
+             | combine({'filters': adguardhome_sync_desired_filters,
+                        'user_rules': adguardhome_user_rules})
+             | to_nice_yaml(indent=2, width=4096) }}
+        dest: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+        owner: root
+        group: root
+        mode: "0600"
+        backup: true
+      no_log: true
+
+  always:
+    - name: adguardhome | Start AdGuard Home after editing the config
+      ansible.builtin.systemd:
+        name: AdGuardHome
+        state: started
