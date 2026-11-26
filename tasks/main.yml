@@ -273,10 +273,10 @@
   no_log: true
   notify: Restart AdGuardHome
 
-- name: adguardhome | Sync filters and user rules on an existing install
-  ansible.builtin.include_tasks: sync_filtering.yml
+- name: adguardhome | Sync managed settings on an existing install
+  ansible.builtin.include_tasks: sync_config.yml
   when:
-    - adguardhome_sync_filtering | bool
+    - adguardhome_sync_filtering | bool or adguardhome_sync_settings | bool
     - adguardhome_installed.stat.exists
     - adguardhome_config.stat.exists
 

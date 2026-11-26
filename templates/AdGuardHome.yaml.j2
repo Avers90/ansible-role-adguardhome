@@ -30,9 +30,9 @@ dns:
     - {{ host }}
 {% endfor %}
   port: {{ adguardhome_dns_port }}
-  anonymize_client_ip: false
+  anonymize_client_ip: {{ adguardhome_anonymize_client_ip | lower }}
   ratelimit: {{ adguardhome_ratelimit }}
-  ratelimit_subnet_len_ipv4: 24
+  ratelimit_subnet_len_ipv4: {{ adguardhome_ratelimit_subnet_len_ipv4 }}
   ratelimit_subnet_len_ipv6: 56
   ratelimit_whitelist: []
   refuse_any: true
@@ -113,8 +113,8 @@ querylog:
   ignored_enabled: true
   interval: 24h
   size_memory: 1000
-  enabled: true
-  file_enabled: true
+  enabled: {{ adguardhome_querylog_enabled | lower }}
+  file_enabled: {{ adguardhome_querylog_enabled | lower }}
 
 statistics:
   dir_path: ""

@@ -74,7 +74,14 @@ adguardhome_cache_ttl_max: 86400
 
 ## Security
 adguardhome_dnssec: true
+## Requests per second per client subnet (0 = off). The subnet is
+## ratelimit_subnet_len_ipv4 wide: with /24 every client of a VPN /24 shares one budget.
 adguardhome_ratelimit: 30
+adguardhome_ratelimit_subnet_len_ipv4: 24
+adguardhome_anonymize_client_ip: false
+
+## Query log (domain history per client, kept 24h). Statistics are not affected.
+adguardhome_querylog_enabled: true
 
 ## Filters
 adguardhome_filters:
@@ -95,3 +102,8 @@ adguardhome_user_rules: []
 ## On = when they differ, the role stops AdGuard Home, rewrites only these two keys
 ## and starts it again (DNS is down for a second or two).
 adguardhome_sync_filtering: false
+
+## Same for the settings above that a live install would otherwise never get:
+## dns.ratelimit, dns.ratelimit_subnet_len_ipv4, dns.anonymize_client_ip, querylog.
+## With the query log off the role also deletes the stored log files.
+adguardhome_sync_settings: false

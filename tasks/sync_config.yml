@@ -1,0 +1,101 @@
+---
+## Keep parts of an existing AdGuardHome.yaml in sync with the inventory:
+## - adguardhome_sync_filtering: `filters` and `user_rules`;
+## - adguardhome_sync_settings: rate limit, client IP anonymization, query log.
+## Everything else in the file (Web UI settings, clients, stats) is kept.
+## AdGuard Home writes its in-memory config back on changes, so the file is only
+## edited while the service is stopped; the stop happens only when something differs.
+- name: adguardhome | Read current configuration
+  ansible.builtin.slurp:
+    src: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+  register: adguardhome_sync_raw
+  no_log: true
+
+- name: adguardhome | Build the desired configuration
+  ansible.builtin.set_fact:
+    adguardhome_sync_current: "{{ adguardhome_sync_raw.content | b64decode | from_yaml }}"
+    adguardhome_sync_overrides: >-
+      {%- set o = {} -%}
+      {%- if adguardhome_sync_filtering | bool -%}
+      {%- set filters = [] -%}
+      {%- for f in adguardhome_filters -%}
+      {%- set _ = filters.append({'enabled': f.enabled | bool, 'url': f.url, 'name': f.name, 'id': f.id | int}) -%}
+      {%- endfor -%}
+      {%- set _ = o.update({'filters': filters, 'user_rules': adguardhome_user_rules}) -%}
+      {%- endif -%}
+      {%- if adguardhome_sync_settings | bool -%}
+      {%- set _ = o.update({
+            'dns': {'ratelimit': adguardhome_ratelimit | int,
+                    'ratelimit_subnet_len_ipv4': adguardhome_ratelimit_subnet_len_ipv4 | int,
+                    'anonymize_client_ip': adguardhome_anonymize_client_ip | bool},
+            'querylog': {'enabled': adguardhome_querylog_enabled | bool,
+                         'file_enabled': adguardhome_querylog_enabled | bool}}) -%}
+      {%- endif -%}
+      {{ o }}
+  no_log: true
+
+- name: adguardhome | Compare with the inventory
+  ansible.builtin.set_fact:
+    adguardhome_sync_desired: "{{ adguardhome_sync_current | combine(adguardhome_sync_overrides, recursive=true) }}"
+  no_log: true
+
+- name: adguardhome | Show configuration drift
+  ansible.builtin.debug:
+    msg:
+      filters_added: "{{ (adguardhome_sync_desired.filters | default([])) | difference(adguardhome_sync_current.filters | default([], true)) | map(attribute='url') | list }}"
+      filters_removed: "{{ (adguardhome_sync_current.filters | default([], true)) | difference(adguardhome_sync_desired.filters | default([])) | map(attribute='url') | list }}"
+      rules_added: "{{ (adguardhome_sync_desired.user_rules | default([], true)) | difference(adguardhome_sync_current.user_rules | default([], true)) }}"
+      rules_removed: "{{ (adguardhome_sync_current.user_rules | default([], true)) | difference(adguardhome_sync_desired.user_rules | default([], true)) }}"
+      settings: >-
+        {%- set out = {} -%}
+        {%- for section, values in adguardhome_sync_overrides.items() if section in ['dns', 'querylog'] -%}
+        {%- for key, value in values.items() if (adguardhome_sync_current[section] | default({}))[key] | default(none) != value -%}
+        {%- set _ = out.update({section ~ '.' ~ key: (adguardhome_sync_current[section] | default({}))[key] | default(none) | string ~ ' -> ' ~ value | string}) -%}
+        {%- endfor -%}
+        {%- endfor -%}
+        {{ out }}
+  when: adguardhome_sync_desired != adguardhome_sync_current
+
+- name: adguardhome | Apply configuration
+  when: adguardhome_sync_desired != adguardhome_sync_current
+  block:
+    - name: adguardhome | Stop AdGuard Home before editing the config
+      ansible.builtin.systemd:
+        name: AdGuardHome
+        state: stopped
+
+    - name: adguardhome | Write the configuration
+      ansible.builtin.copy:
+        content: "{{ adguardhome_sync_desired | to_nice_yaml(indent=2, width=4096) }}"
+        dest: "{{ adguardhome_install_dir }}/AdGuardHome.yaml"
+        owner: root
+        group: root
+        mode: "0600"
+        backup: true
+      no_log: true
+
+  always:
+    - name: adguardhome | Start AdGuard Home after editing the config
+      ansible.builtin.systemd:
+        name: AdGuardHome
+        state: started
+
+- name: adguardhome | Find stored query log files
+  ansible.builtin.find:
+    paths: "{{ adguardhome_install_dir }}/data"
+    patterns: "querylog.json*"
+  register: adguardhome_querylog_files
+  when:
+    - adguardhome_sync_settings | bool
+    - not adguardhome_querylog_enabled | bool
+
+- name: adguardhome | Delete stored query log (query log is off)
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: absent
+  loop: "{{ adguardhome_querylog_files.files | default([]) }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+  when:
+    - adguardhome_sync_settings | bool
+    - not adguardhome_querylog_enabled | bool

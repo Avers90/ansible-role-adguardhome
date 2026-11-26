@@ -37,10 +37,14 @@ Other distributions will fail with an error message.
 | `adguardhome_upstream_dns` | Cloudflare, Google, Quad9 | Upstream DNS servers |
 | `adguardhome_bootstrap_dns` | `[1.1.1.1, 8.8.8.8]` | Bootstrap DNS |
 | `adguardhome_dnssec` | `true` | Enable DNSSEC |
-| `adguardhome_ratelimit` | `30` | Rate limit (requests/sec) |
+| `adguardhome_ratelimit` | `30` | Rate limit (requests/sec per client subnet, 0 = off) |
+| `adguardhome_ratelimit_subnet_len_ipv4` | `24` | Client subnet for the rate limit; `32` = per client (VPN peers in one /24 otherwise share it) |
+| `adguardhome_anonymize_client_ip` | `false` | Store client IPs truncated in logs and stats |
+| `adguardhome_querylog_enabled` | `true` | Query log (per-client domain history, 24h) |
 | `adguardhome_filters` | AdGuard, AdAway | DNS filters |
 | `adguardhome_user_rules` | `[]` | Custom whitelist rules |
 | `adguardhome_sync_filtering` | `false` | Keep `filters` and `user_rules` of an existing install in sync with the inventory |
+| `adguardhome_sync_settings` | `false` | Same for rate limit, IP anonymization and query log; query log off also deletes stored log files |
 
 ## Version Management
 
@@ -208,16 +212,18 @@ systemctl restart AdGuardHome
 - AdGuard Home auto-migrates `AdGuardHome.yaml` on startup if `schema_version` changes
 - A pre-migration snapshot `AdGuardHome.yaml.<old_version>` is saved before each update
 
-### Syncing filters and user rules
+### Syncing filters, user rules and settings
 
-With `adguardhome_sync_filtering: true` the two lists stay managed by the inventory on
-existing installs too:
+With `adguardhome_sync_filtering: true` the two lists, and with
+`adguardhome_sync_settings: true` the rate limit, client IP anonymization and query log
+settings, stay managed by the inventory on existing installs too:
 
 1. The role reads `AdGuardHome.yaml` and compares `filters` (`enabled`, `url`, `name`, `id`)
-   and `user_rules` with `adguardhome_filters` / `adguardhome_user_rules`.
+   and `user_rules` with `adguardhome_filters` / `adguardhome_user_rules` (plus `dns.ratelimit*`,
+   `dns.anonymize_client_ip`, `querylog.enabled` / `file_enabled` with the settings sync).
 2. No difference — nothing happens, the service is not touched.
 3. Difference — the drift is printed, AdGuard Home is stopped, only these two keys are
-   replaced (the previous file is kept as a timestamped backup next to it) and the
+   replaced, other keys untouched (the previous file is kept as a timestamped backup) and the
    service is started again. DNS is unavailable for a second or two.
 
 The file is edited only while the service is stopped: AdGuard Home writes its in-memory
